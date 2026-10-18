@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ORBIT LAB</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="app">
+  <header class="hd">
+    <div class="logo">ORBIT<b>/</b>LAB</div>
+    <span class="tag">Simulador de foguete · RK4 · massa variável</span>
+    <span class="tag" id="src">Fonte: dados de exemplo</span>
+    <div class="st" id="stw"><span class="dot"></span><span class="tag" id="stx">PRONTO</span></div>
+  </header>
+
+  <section class="main">
+    <div class="col">
+      <div class="pn"><h3>Simulação</h3><div class="bd">
+        <label>Parâmetros (JSON enviado ao backend)</label>
+        <textarea id="payload" spellcheck="false">{}</textarea>
+        <button id="bsim" class="full">Simular</button>
+        <div class="msg" id="msg"></div>
+      </div></div>
+
+      <div class="pn"><h3>Reprodução</h3><div class="bd">
+        <div class="btns"><button id="bp">Iniciar</button><button id="bs">Pausar</button><button id="br">Reiniciar</button></div>
+        <label>Velocidade <i id="spv">1×</i></label>
+        <div class="sel" id="spd"><button data-s=".25">¼×</button><button data-s=".5">½×</button><button data-s="1" class="on">1×</button><button data-s="2">2×</button></div>
+        <label>Instante <i id="tv">0.00 s</i></label>
+        <input type="range" id="scr" min="0" max="1000" value="0">
+        <table class="tbl">
+          <tr><td>Passos</td><td id="n">–</td></tr>
+          <tr><td>Duração</td><td id="dur">–</td></tr>
+          <tr><td>Apogeu</td><td id="apx">–</td></tr>
+          <tr><td>t no apogeu</td><td id="apt">–</td></tr>
+        </table>
+      </div></div>
+
+      <div class="pn" style="flex:1"><h3>Trajetória 2D <span id="xy">x 0.0 · y 0.0</span></h3><div class="bd"><canvas id="cT"></canvas></div></div>
+    </div>
+
+    <div class="pn"><h3>Modelo do veículo <span>representação visual · arraste para girar · roda para zoom</span></h3>
+      <div class="view" id="view">
+        <div class="rings"><i></i><i></i><i></i></div>
+        <canvas id="gl"></canvas>
+        <div class="call cl" style="top:30%">Altitude<b id="c1">0.0<small>m</small></b></div>
+        <div class="call cr" style="top:30%">Velocidade<b id="c2">0.0<small>m/s</small></b></div>
+        <div class="call cl" style="top:62%">Aceleração<b id="c3">0.0<small>m/s²</small></b></div>
+        <div class="call cr" style="top:62%">Empuxo<b id="c4">0.0<small>N</small></b></div>
+        <div class="ev" id="ev">APOGEU</div>
+        <div class="note">O 3D é apenas ilustrativo (não é CFD). Atitude, chama e posição seguem os estados calculados pelo backend.</div>
+        <div class="err" id="err">Three.js não carregou — modelo 3D indisponível</div>
+      </div></div>
+
+    <div class="col">
+      <div class="pn" style="flex:1"><h3>Altitude × tempo <span>m</span></h3><div class="bd"><canvas id="c_h"></canvas></div></div>
+      <div class="pn" style="flex:1"><h3>Velocidade × tempo <span>m/s</span></h3><div class="bd"><canvas id="c_v"></canvas></div></div>
+      <div class="pn" style="flex:1"><h3>Energia <span>J · Ec vermelho / Ep cinza</span></h3><div class="bd"><canvas id="c_e"></canvas></div></div>
+      <div class="pn" style="flex:1"><h3>Forças <span>N · empuxo / arrasto / peso</span></h3><div class="bd"><canvas id="c_f"></canvas></div></div>
+    </div>
+  </section>
+
+  <footer class="kp">
+    <div><em>Tempo T+</em><b id="k0">0.00<small>s</small></b><span class="bar"><s id="b0"></s></span></div>
+    <div><em>Altitude</em><b id="k1">0.0<small>m</small></b><span class="bar"><s id="b1"></s></span></div>
+    <div><em>Velocidade</em><b id="k2">0.0<small>m/s</small></b><span class="bar"><s id="b2"></s></span></div>
+    <div><em>Aceleração</em><b id="k3">0.0<small>m/s²</small></b><span class="bar"><s id="b3"></s></span></div>
+    <div><em>Massa</em><b id="k4">0.000<small>kg</small></b><span class="bar"><s id="b4"></s></span></div>
+    <div><em>Arrasto</em><b id="k5">0.00<small>N</small></b><span class="bar"><s id="b5"></s></span></div>
+  </footer>
+</div>
+<div id="tip"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="demo.js"></script>
+<script src="charts.js"></script>
+<script src="renderer.js"></script>
+<script src="rocket3d.js"></script>
+<script src="components/telemetry.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

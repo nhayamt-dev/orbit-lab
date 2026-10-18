@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.venv/
+venv/
+
+# Ambientes e segredos
+.env
+.env.*
+!.env.example
+
+# Editores e sistema
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Backups e arquivos temporários
+*.backup
+*.bak
+*.tmp
+
+# Backups locais — não publicar
+/backup-integracao-20261013-122620/
+/frontend-antes-orbit/
+/frontend/*.backup-*
+/frontend/*.pre-integracao
+/frontend/*.save
+/frontend/*.save.*
