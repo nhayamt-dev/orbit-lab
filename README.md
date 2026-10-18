@@ -1,7 +1,7 @@
 # ORBIT LAB
 
 Simulador de trajetoria de foguetes em Python e JavaScript.
-\n[**Acessar o ORBIT LAB online**](https://orbit-lab.onrender.com/)
+[**Acessar o ORBIT LAB online**](https://orbit-lab.onrender.com/)
 
 
 ## Estado do projeto
@@ -12,7 +12,7 @@ Projeto experimental em desenvolvimento. O modelo atual usa empuxo constante e m
 
 Ative o ambiente virtual e execute: `python -m backend.main`
 
-Acesse o simulador online: [ORBIT LAB](https://orbit-lab.onrender.com/).
+Acesse o simulador localmente: http://127.0.0.1:8000/.
 
 ## Testes
 
