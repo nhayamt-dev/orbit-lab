@@ -2,6 +2,7 @@
 from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
 from pathlib import Path
 import json
+import os
 import sys
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -118,8 +119,10 @@ class RocketHandler(SimpleHTTPRequestHandler):
 
 
 if __name__ == "__main__":
-    server = ThreadingHTTPServer(("127.0.0.1", 8000), RocketHandler)
-    print("ORBIT LAB disponível em http://127.0.0.1:8000/")
+    host = "0.0.0.0"
+    port = int(os.environ.get("PORT", "8000"))
+    server = ThreadingHTTPServer((host, port), RocketHandler)
+    print(f"ORBIT LAB disponível na porta {port}")
     print("Pressione Ctrl+C para encerrar.")
     try:
         server.serve_forever()
