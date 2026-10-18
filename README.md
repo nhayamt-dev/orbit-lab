@@ -12,7 +12,7 @@ Projeto experimental em desenvolvimento. O modelo atual usa empuxo constante e m
 
 Ative o ambiente virtual e execute: `python -m backend.main`
 
-Acesse http://127.0.0.1:8000/.
+Acesse o simulador online: [ORBIT LAB](https://orbit-lab.onrender.com/).
 
 ## Testes
 
