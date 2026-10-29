@@ -1,8 +1,9 @@
 /* ORBIT LAB — integração com o backend Python.
-   Mantém os componentes visuais existentes e usa dados reais da API. */
+   Módulo ES: o modelo 3D é carregado de forma isolada; se o Three.js falhar,
+   o restante do painel (gráficos, telemetria, trajetória) continua funcionando. */
 
 const SIM_ENDPOINT = "/api/simulate";
-const G = 9.80665;
+const MIN_ATTITUDE_SPEED = 0.3; // m/s: abaixo disso a direção da velocidade não é confiável
 const $ = (id) => document.getElementById(id);
 
 let D = null;
@@ -11,27 +12,106 @@ let playing = false;
 let speed = 1;
 let last = 0;
 let raf = 0;
-let rotTilt = 0;
+
+const REST_STATE = { tilt: 0, flame: false, hNorm: 0, vectors: false };
+let rocket = { ok: false, render() {} };
 
 const charts = [
-  createChart("c_h", [{ k: "h", c: "#ff2b2b", n: "altitude (m)" }], seek),
-  createChart("c_v", [{ k: "v", c: "#ff2b2b", n: "velocidade (m/s)" }], seek),
+  createChart("c_h", [{ k: "h", c: "#56d9ff", n: "altitude (m)" }], seek),
+  createChart("c_v", [{ k: "v", c: "#a78bfa", n: "velocidade (m/s)" }], seek),
   createChart("c_e", [
-    { k: "Ek", c: "#ff2b2b", n: "Ec (J)" },
-    { k: "Ep", c: "#8a8a8a", n: "Ep (J)" }
+    { k: "Ek", c: "#a78bfa", n: "Ec (J)" },
+    { k: "Ep", c: "#56d9ff", n: "Ep (J)" }
   ], seek),
   createChart("c_f", [
-    { k: "thrust", c: "#ff2b2b", n: "empuxo (N)" },
-    { k: "drag", c: "#f2f2f2", n: "arrasto (N)" },
-    { k: "weight", c: "#8a8a8a", n: "peso (N)" }
+    { k: "thrust", c: "#56d9ff", n: "empuxo (N)" },
+    { k: "drag", c: "#ff5b8a", n: "arrasto (N)" },
+    { k: "weight", c: "#b7a4ff", n: "peso (N)" }
   ], seek)
 ];
 
 const traj = createTrajectory("cT", "xy");
-const rocket = createRocket3D("view", "gl", "err");
+
+// Carrega o 3D sem bloquear o resto da interface.
+import("./rocket3d.js")
+  .then((module) => module.createRocket3D("view", "gl", "err"))
+  .then((instance) => {
+    rocket = instance;
+    paint();
+  })
+  .catch((error) => {
+    console.warn("ORBIT LAB: modelo 3D indisponível.", error);
+    const box = $("err");
+    if (box) box.style.display = "grid";
+  });
+
+/* ---------- utilidades ---------- */
+
+// Máximo sem espalhar o array em argumentos (evita RangeError em séries longas).
+function maxOf(values, useAbs = false) {
+  let m = -Infinity;
+  for (let i = 0; i < values.length; i++) {
+    const v = useAbs ? Math.abs(values[i]) : values[i];
+    if (v > m) m = v;
+  }
+  return m === -Infinity ? 0 : m;
+}
+
+function indexOfMax(values) {
+  let best = 0;
+  for (let i = 1; i < values.length; i++) {
+    if (values[i] > values[best]) best = i;
+  }
+  return best;
+}
+
+// Inclinação do foguete em cada instante (rotação em Z; nariz em +Y quando 0).
+// Segue a direção da velocidade, sem saltos de volta completa e interpolando
+// os trechos de velocidade muito baixa (início e apogeu).
+function buildAttitude(vx, vy, v) {
+  const N = v.length;
+  const tilt = new Array(N).fill(NaN);
+  let current = 0;
+  let started = false;
+
+  for (let i = 0; i < N; i++) {
+    if (!(v[i] > MIN_ATTITUDE_SPEED)) continue;
+
+    let a = -Math.atan2(vx[i], vy[i]);
+    if (started) {
+      while (a - current > Math.PI) a -= 2 * Math.PI;
+      while (a - current < -Math.PI) a += 2 * Math.PI;
+    }
+    tilt[i] = a;
+    current = a;
+    started = true;
+  }
+
+  if (!started) return tilt.fill(0);
+
+  let prev = -1;
+  for (let i = 0; i < N; i++) {
+    if (Number.isNaN(tilt[i])) continue;
+
+    if (prev === -1) {
+      for (let j = 0; j < i; j++) tilt[j] = tilt[i];
+    } else if (i - prev > 1) {
+      for (let j = prev + 1; j < i; j++) {
+        const f = (j - prev) / (i - prev);
+        tilt[j] = tilt[prev] + (tilt[i] - tilt[prev]) * f;
+      }
+    }
+    prev = i;
+  }
+
+  for (let j = prev + 1; j < N; j++) tilt[j] = tilt[prev];
+  return tilt;
+}
+
+/* ---------- dados do backend ---------- */
 
 function normalizeBackend(api) {
-  if (!Array.isArray(api.states) || !api.states.length) {
+  if (!api || !Array.isArray(api.states) || !api.states.length) {
     throw new Error("A API não retornou estados da simulação.");
   }
 
@@ -43,23 +123,21 @@ function normalizeBackend(api) {
   const a = api.analysis;
   const N = states.length;
 
+  if (N < 2) {
+    throw new Error("A simulação precisa ter pelo menos dois estados.");
+  }
+
   const series = {
-    t: states.map(s => Number(s.time)),
-    x: states.map(s => Number(s.x)),
-    h: states.map(s => Number(s.y)),
-    vx: states.map(s => Number(s.vx)),
-    vy: states.map(s => Number(s.vy)),
-    v: states.map(s => Number(s.speed)),
-    a: a.acceleration_m_s2,
-    thrust: a.thrust_n,
-    drag: a.drag_n,
-    weight: a.weight_n,
-    Ek: a.kinetic_energy_j,
-    Ep: a.potential_energy_j
+    t: states.map((s) => Number(s.time)),
+    x: states.map((s) => Number(s.x)),
+    h: states.map((s) => Number(s.y)),
+    vx: states.map((s) => Number(s.vx)),
+    vy: states.map((s) => Number(s.vy)),
+    v: states.map((s) => Number(s.speed))
   };
 
   for (const key of ["t", "x", "h", "vx", "vy", "v"]) {
-    if (series[key].some(value => !Number.isFinite(value))) {
+    if (series[key].some((value) => !Number.isFinite(value))) {
       throw new Error("A API retornou valores inválidos em " + key + ".");
     }
   }
@@ -75,39 +153,33 @@ function normalizeBackend(api) {
 
   for (const [key, apiKey] of Object.entries(mapping)) {
     if (!Array.isArray(a[apiKey]) || a[apiKey].length !== N) {
-      throw new Error(
-        "A série " + apiKey + " está ausente ou tem tamanho incorreto."
-      );
+      throw new Error("A série " + apiKey + " está ausente ou tem tamanho incorreto.");
     }
 
     series[key] = a[apiKey].map(Number);
 
-    if (series[key].some(value => !Number.isFinite(value))) {
+    if (series[key].some((value) => !Number.isFinite(value))) {
       throw new Error("A API retornou valores inválidos em " + apiKey + ".");
     }
-  }
-
-  if (N < 2) {
-    throw new Error("A simulação precisa ter pelo menos dois estados.");
   }
 
   // A API atual não fornece massa por estado. Não inventamos essa série.
   series.m = Array(N).fill(0);
 
-  const max = {
-    h: Math.max(0, ...series.h),
-    v: Math.max(0, ...series.v),
-    a: Math.max(0, ...series.a.map(Math.abs)),
-    drag: Math.max(0, ...series.drag.map(Math.abs))
-  };
-
   const t0 = series.t[0];
-  series.t = series.t.map(t => t - t0);
+  series.t = series.t.map((t) => t - t0);
   series.N = N;
   series.TT = series.t[N - 1];
   series.DT = series.TT / (N - 1);
-  series.AP = series.h.indexOf(Math.max(...series.h));
-  series.max = max;
+  series.AP = indexOfMax(series.h);
+  series.max = {
+    h: Math.max(0, maxOf(series.h)),
+    v: Math.max(0, maxOf(series.v)),
+    a: maxOf(series.a, true),
+    drag: maxOf(series.drag, true),
+    thrust: maxOf(series.thrust, true)
+  };
+  series.tilt = buildAttitude(series.vx, series.vy, series.v);
   series.missing = ["m"];
   series.derived = [];
 
@@ -121,7 +193,7 @@ function normalizeBackend(api) {
 function setData(data, label) {
   D = data;
 
-  charts.forEach(chart => chart.setData(D));
+  charts.forEach((chart) => chart.setData(D));
   traj.setData(D);
 
   $("src").textContent = "Fonte: " + label;
@@ -145,22 +217,16 @@ function fail(message) {
   console.error(message);
 }
 
+function readField(id) {
+  const raw = $(id).value.trim().replace(",", ".");
+  return raw === "" ? NaN : Number(raw);
+}
+
 async function simulate() {
-  let input;
-
-  try {
-    input = JSON.parse($("payload").value || "{}");
-  } catch (error) {
-    fail("JSON de parâmetros inválido: " + error.message);
-    return;
-  }
-
-  // Mantém o controle de parâmetros existente no dashboard.
-  // Se o JSON estiver vazio, usa valores iniciais válidos.
   const payload = {
-    thrust: Number(input.thrust ?? 50),
-    duration: Number(input.duration ?? 0.5),
-    angle: Number(input.angle ?? 80)
+    thrust: readField("f_thrust"),
+    duration: readField("f_duration"),
+    angle: readField("f_angle")
   };
 
   if (
@@ -168,7 +234,7 @@ async function simulate() {
     !Number.isFinite(payload.duration) ||
     !Number.isFinite(payload.angle)
   ) {
-    fail("Empuxo, duração e ângulo precisam ser números válidos.");
+    fail("Preencha empuxo, duração e ângulo com números válidos.");
     return;
   }
 
@@ -183,14 +249,25 @@ async function simulate() {
       body: JSON.stringify(payload)
     });
 
-    const result = await response.json();
+    const text = await response.text();
+    let result;
 
-    if (!response.ok) {
-      throw new Error(result.error || "Erro HTTP " + response.status);
+    try {
+      result = JSON.parse(text);
+    } catch {
+      throw new Error(
+        response.ok
+          ? "A API retornou uma resposta que não é JSON."
+          : "Erro HTTP " + response.status + " (a resposta não é JSON). " +
+            "Use o backend: python -m backend.main"
+      );
     }
 
-    const data = normalizeBackend(result);
-    setData(data, "API Python " + SIM_ENDPOINT);
+    if (!response.ok) {
+      throw new Error((result && result.error) || "Erro HTTP " + response.status);
+    }
+
+    setData(normalizeBackend(result), "API Python " + SIM_ENDPOINT);
     play();
   } catch (error) {
     fail(error.message || "Falha ao executar a simulação.");
@@ -199,22 +276,29 @@ async function simulate() {
   }
 }
 
+/* ---------- desenho e reprodução ---------- */
+
 function paint() {
-  if (!D) return;
+  if (!D) {
+    rocket.render(REST_STATE);
+    return;
+  }
 
   const k = Math.max(0, Math.min(D.N - 1, Math.floor(idx)));
 
-  charts.forEach(chart => chart.draw(k));
+  charts.forEach((chart) => chart.draw(k));
   traj.draw(k);
 
-  if (D.v[k] > 0.3) {
-    rotTilt = -Math.atan2(D.vx[k], D.vy[k] || 0.000001);
-  }
-
   rocket.render({
-    tilt: rotTilt,
+    tilt: D.tilt[k],
     flame: D.thrust[k] > 0,
-    hNorm: D.h[k] / (D.max.h || 1)
+    thrustNorm: D.max.thrust ? Math.abs(D.thrust[k]) / D.max.thrust : 1,
+    hNorm: Math.max(0, Math.min(1, D.h[k] / (D.max.h || 1))),
+    vectors: true,
+    vx: D.vx[k],
+    vy: D.vy[k],
+    vNorm: D.max.v ? D.v[k] / D.max.v : 0,
+    dragNorm: D.max.drag ? Math.abs(D.drag[k]) / D.max.drag : 0
   });
 
   updateTelemetry(D, k);
@@ -234,7 +318,9 @@ function paint() {
 function tick(now) {
   if (!playing || !D) return;
 
-  idx += ((now - last) / 1000) * speed / D.DT;
+  // Limita o intervalo entre quadros: evita saltos ao voltar de outra aba.
+  const dtMs = Math.min(now - last, 100);
+  idx += (dtMs / 1000) * speed / D.DT;
   last = now;
 
   if (idx >= D.N - 1) {
@@ -243,12 +329,7 @@ function tick(now) {
   }
 
   paint();
-
-  if (playing) {
-    raf = requestAnimationFrame(tick);
-  } else {
-    raf = 0;
-  }
+  raf = playing ? requestAnimationFrame(tick) : 0;
 }
 
 function play() {
@@ -278,36 +359,50 @@ function reset() {
 }
 
 function seek(index) {
+  if (!D) return;
+
   pause(true);
   idx = Math.max(0, Math.min(D.N - 1, Number(index)));
   paint();
 }
+
+/* ---------- eventos ---------- */
 
 $("bp").addEventListener("click", play);
 $("bs").addEventListener("click", () => pause());
 $("br").addEventListener("click", reset);
 $("bsim").addEventListener("click", simulate);
 
-$("scr").addEventListener("input", event => {
+["f_thrust", "f_duration", "f_angle"].forEach((id) => {
+  $(id).addEventListener("keydown", (event) => {
+    if (event.key === "Enter") simulate();
+  });
+});
+
+$("scr").addEventListener("input", (event) => {
   if (D) seek(Number(event.target.value) / 1000 * (D.N - 1));
 });
 
-document.querySelectorAll("#spd button").forEach(button => {
+document.querySelectorAll("#spd button").forEach((button) => {
   button.addEventListener("click", () => {
     speed = Number(button.dataset.s);
     $("spv").textContent = button.textContent;
 
-    document.querySelectorAll("#spd button").forEach(item => {
+    document.querySelectorAll("#spd button").forEach((item) => {
       item.classList.toggle("on", item === button);
     });
   });
 });
 
-addEventListener("keydown", event => {
+addEventListener("keydown", (event) => {
+  const tag = event.target.tagName;
+
   if (
     event.code === "Space" &&
-    event.target.tagName !== "TEXTAREA" &&
-    event.target.tagName !== "INPUT"
+    tag !== "TEXTAREA" &&
+    tag !== "INPUT" &&
+    tag !== "BUTTON" &&
+    tag !== "SELECT"
   ) {
     event.preventDefault();
     playing ? pause() : play();
@@ -315,25 +410,13 @@ addEventListener("keydown", event => {
 });
 
 new ResizeObserver(() => {
-  charts.forEach(chart => chart.size());
+  charts.forEach((chart) => chart.size());
   traj.size();
   if (D) paint();
 }).observe(document.body);
-
-// Mantém o renderizador 3D atualizado quando a simulação está pausada.
-(function idleRender() {
-  if (D && !playing) {
-    rocket.render({
-      tilt: rotTilt,
-      flame: D.thrust[Math.floor(idx)] > 0,
-      hNorm: D.h[Math.floor(idx)] / (D.max.h || 1)
-    });
-  }
-
-  requestAnimationFrame(idleRender);
-})();
 
 // Sem dados fictícios no início: a simulação só carrega ao clicar em Simular.
 $("src").textContent = "Fonte: aguardando simulação Python";
 $("msg").textContent = "Configure os parâmetros e clique em Simular.";
 $("stx").textContent = "PRONTO";
+paint();

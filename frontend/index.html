@@ -3,25 +3,36 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ORBIT LAB</title>
+<meta name="theme-color" content="#07060f">
+<title>ORBIT LAB — Simulador</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='15' fill='%23a78bfa'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
 <div class="app">
   <header class="hd">
-    <div class="logo">ORBIT<b>/</b>LAB</div>
-    <span class="tag">Simulador de foguete · RK4 · massa variável</span>
-    <span class="tag" id="src">Fonte: dados de exemplo</span>
+    <a class="logo" href="intro.html" title="Voltar à página inicial"><span class="mark"></span>ORBIT<b>/</b>LAB</a>
+    <span class="tag">Simulador de foguete · integração RK4</span>
+    <span class="tag" id="src">Fonte: aguardando simulação</span>
     <div class="st" id="stw"><span class="dot"></span><span class="tag" id="stx">PRONTO</span></div>
   </header>
 
   <section class="main">
     <div class="col">
-      <div class="pn"><h3>Simulação</h3><div class="bd">
-        <label>Parâmetros (JSON enviado ao backend)</label>
-        <textarea id="payload" spellcheck="false">{}</textarea>
-        <button id="bsim" class="full">Simular</button>
+      <div class="pn"><h3>Parâmetros</h3><div class="bd">
+        <label class="fld">Empuxo
+          <span class="inp"><input id="f_thrust" type="number" inputmode="decimal" value="50" min="0" step="any"><em>N</em></span>
+        </label>
+        <label class="fld">Duração do empuxo
+          <span class="inp"><input id="f_duration" type="number" inputmode="decimal" value="0.5" min="0" step="any"><em>s</em></span>
+        </label>
+        <label class="fld">Ângulo de lançamento
+          <span class="inp"><input id="f_angle" type="number" inputmode="decimal" value="80" min="0" max="90" step="any"><em>°</em></span>
+        </label>
+        <button id="bsim" class="full primary">Simular</button>
         <div class="msg" id="msg"></div>
       </div></div>
 
@@ -46,20 +57,26 @@
       <div class="view" id="view">
         <div class="rings"><i></i><i></i><i></i></div>
         <canvas id="gl"></canvas>
+        <div class="legend" aria-label="Legenda dos vetores">
+          <span><i class="vel"></i>Velocidade</span>
+          <span><i class="drg"></i>Arrasto</span>
+          <span><i class="wgt"></i>Peso</span>
+          <kbd title="Alterna os vetores">V</kbd>
+        </div>
         <div class="call cl" style="top:30%">Altitude<b id="c1">0.0<small>m</small></b></div>
         <div class="call cr" style="top:30%">Velocidade<b id="c2">0.0<small>m/s</small></b></div>
         <div class="call cl" style="top:62%">Aceleração<b id="c3">0.0<small>m/s²</small></b></div>
         <div class="call cr" style="top:62%">Empuxo<b id="c4">0.0<small>N</small></b></div>
         <div class="ev" id="ev">APOGEU</div>
-        <div class="note">O 3D é apenas ilustrativo (não é CFD). Atitude, chama e posição seguem os estados calculados pelo backend.</div>
+        <div class="note">O 3D é apenas ilustrativo (não é CFD). Atitude, chama e posição seguem os estados calculados pelo backend; o comprimento das setas é relativo.</div>
         <div class="err" id="err">Three.js não carregou — modelo 3D indisponível</div>
       </div></div>
 
     <div class="col">
       <div class="pn" style="flex:1"><h3>Altitude × tempo <span>m</span></h3><div class="bd"><canvas id="c_h"></canvas></div></div>
       <div class="pn" style="flex:1"><h3>Velocidade × tempo <span>m/s</span></h3><div class="bd"><canvas id="c_v"></canvas></div></div>
-      <div class="pn" style="flex:1"><h3>Energia <span>J · Ec vermelho / Ep cinza</span></h3><div class="bd"><canvas id="c_e"></canvas></div></div>
-      <div class="pn" style="flex:1"><h3>Forças <span>N · empuxo / arrasto / peso</span></h3><div class="bd"><canvas id="c_f"></canvas></div></div>
+      <div class="pn" style="flex:1"><h3>Energia <span>J</span></h3><div class="bd"><canvas id="c_e"></canvas></div></div>
+      <div class="pn" style="flex:1"><h3>Forças <span>N</span></h3><div class="bd"><canvas id="c_f"></canvas></div></div>
     </div>
   </section>
 
@@ -74,11 +91,17 @@
 </div>
 <div id="tip"></div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/"
+  }
+}
+</script>
 <script src="charts.js"></script>
 <script src="renderer.js"></script>
-<script src="rocket3d.js"></script>
 <script src="components/telemetry.js"></script>
-<script src="app.js"></script>
+<script type="module" src="app.js"></script>
 </body>
 </html>

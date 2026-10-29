@@ -13,6 +13,7 @@ sys.path.insert(0, str(ROOT))
 from backend.models import RocketParameters
 from backend.simulation import simulate_constant_thrust
 from backend.analysis import analyze_trajectory
+from backend.chemistry import build_reaction_setup, build_chemical_state
 
 
 class RocketHandler(SimpleHTTPRequestHandler):
@@ -69,6 +70,24 @@ class RocketHandler(SimpleHTTPRequestHandler):
             )
 
             analysis = analyze_trajectory(states, params, thrust)
+            reaction_setup = build_reaction_setup(
+                params.bicarbonate_mass,
+                params.acetic_acid_mass,
+                params.reaction_rate,
+            )
+            chemistry = [
+                {
+                    "time": float(state.time),
+                    "bicarbonate_moles": chemical.bicarbonate_moles,
+                    "acetic_acid_moles": chemical.acetic_acid_moles,
+                    "limiting_reagent": chemical.limiting_reagent.value,
+                    "co2_moles": chemical.co2_moles,
+                    "co2_mass": chemical.co2_mass,
+                    "reaction_progress": chemical.reaction_progress,
+                }
+                for state in states
+                for chemical in [build_chemical_state(state.time, reaction_setup)]
+            ]
 
             result = {
                 "states": [
@@ -83,6 +102,7 @@ class RocketHandler(SimpleHTTPRequestHandler):
                     for s in states
                 ],
                 "analysis": analysis,
+                "chemistry": chemistry,
                 "parameters": {
                     "thrust": thrust,
                     "duration": duration,
